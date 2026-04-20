@@ -114,6 +114,7 @@ EOF
 setup_runit_service() {
     local service_name="$1"
     local run_command="$2"
+    local SVDIR="${SVDIR:-$PREFIX/var/service}"
 
     local sv_dir="$SVDIR/$service_name"
     mkdir -p "$sv_dir/log"
