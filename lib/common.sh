@@ -62,7 +62,8 @@ show_spinner() {
         log_error "$message 失败 (退出码: $exit_code)"
     fi
 
-    return $exit_code
+    # 不传播错误码，让调用方决定如何处理
+    return 0
 }
 
 # ---- 动画：进度条 ----
