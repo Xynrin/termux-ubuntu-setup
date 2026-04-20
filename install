@@ -1,0 +1,387 @@
+#!/usr/bin/env bash
+# ============================================================
+#  install - termux-ubuntu-setup 一键安装入口
+#
+#  使用方法:
+#    1. 在线安装: curl -fsSL https://raw.githubusercontent.com/Xynrin/termux-ubuntu-setup/main/install | bash
+#    2. 本地运行: bash install
+#
+#  项目地址: https://github.com/Xynrin/termux-ubuntu-setup
+#  许可证: MIT
+# ============================================================
+
+set -euo pipefail
+
+# ============================================================
+#  修复：curl | bash 管道模式下 stdin 被占用的问题
+#  当通过 curl | bash 运行时，bash 的 stdin 已被 curl 占用，
+#  导致 read 命令读到 EOF 而退出。这里将 stdin 重定向到终端。
+# ============================================================
+if [ ! -t 0 ]; then
+    exec < /dev/tty
+fi
+
+# ---- 项目信息 ----
+REPO_OWNER="${REPO_OWNER:-Xynrin}"
+REPO_NAME="termux-ubuntu-setup"
+REPO_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}"
+INSTALL_DIR="$HOME/${REPO_NAME}"
+
+# ---- 颜色定义（内联，确保在线安装时也可用） ----
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+WHITE='\033[0;37m'
+BOLD='\033[1m'
+DIM='\033[2m'
+NC='\033[0m'
+
+# ---- 内联动画函数（在线安装时 lib/ 尚不可用） ----
+inline_spinner() {
+    local message="$1"
+    shift
+    local pid
+    local chars=('/' '-' '\' '|')
+    local i=0
+
+    "$@" &
+    pid=$!
+    tput civis 2>/dev/null
+
+    while kill -0 "$pid" 2>/dev/null; do
+        printf "\r  ${CYAN}${chars[$i]}${NC} ${message}"
+        sleep 0.15
+        ((i = (i + 1) % ${#chars[@]}))
+    done
+
+    tput cnorm 2>/dev/null
+    wait "$pid"
+    local exit_code=$?
+    printf "\r\033[K"
+
+    if [ $exit_code -eq 0 ]; then
+        echo -e "  ${GREEN}[OK]${NC}    ${message} 完成"
+    else
+        echo -e "  ${RED}[ERROR]${NC} ${message} 失败"
+    fi
+    return $exit_code
+}
+
+inline_typewriter() {
+    local text="$1"
+    local delay="${2:-0.03}"
+    for ((i = 0; i < ${#text}; i++)); do
+        printf "%s" "${text:$i:1}"
+        sleep "$delay"
+    done
+    echo ""
+}
+
+# ---- 内联 Logo（在线安装时使用） ----
+inline_logo() {
+    clear
+    echo -e "${CYAN}"
+    cat <<'EOF'
+    ╔══════════════════════════════════════════════════╗
+    ║                                                  ║
+    ║   _   _                  ____  _                 ║
+    ║  | | | | __ _ _ __   ___/ ___|| |__   __ _ _ __  ║
+    ║  | |_| |/ _` | '_ \ / _ \___ \| '_ \ / _` | '__| ║
+    ║  |  _  | (_| | | | |  __/___) | | | | (_| | |    ║
+    ║  |_| |_|\__,_|_| |_|\___|____/|_| |_|\__,_|_|    ║
+    ║                                                  ║
+    ║         Ubuntu Desktop on Android                ║
+    ║         One-Click Setup Script                   ║
+    ║                                                  ║
+    ╚══════════════════════════════════════════════════╝
+EOF
+    echo -e "${NC}"
+}
+
+# ---- 环境检测 ----
+check_environment() {
+    # 检查 Termux
+    if [ ! -d "/data/data/com.termux" ] && [ -z "${TERMUX_VERSION:-}" ]; then
+        echo -e "${RED}[ERROR] 此脚本必须在 Termux 环境中运行！${NC}"
+        echo ""
+        echo -e "  请从以下地址下载安装 Termux："
+        echo -e "    ${CYAN}https://github.com/termux/termux-app/releases${NC}"
+        echo -e "    ${CYAN}https://f-droid.org/packages/com.termux/${NC}"
+        echo -e "  ${DIM}注意：不要使用 Google Play 版本（已过时）${NC}"
+        exit 1
+    fi
+
+    # 检查网络
+    echo -e "  ${BLUE}[INFO]${NC}  检查网络连接..."
+    if ! ping -c 1 -W 5 google.com &>/dev/null && ! ping -c 1 -W 5 baidu.com &>/dev/null; then
+        echo -e "  ${RED}[ERROR] 网络连接失败，请检查网络设置${NC}"
+        exit 1
+    fi
+    echo -e "  ${GREEN}[OK]${NC}    网络连接正常"
+}
+
+# ---- 下载项目 ----
+download_project() {
+    echo ""
+    echo -e "  ${BLUE}[INFO]${NC}  正在下载项目文件..."
+
+    if [ -d "$INSTALL_DIR" ]; then
+        echo -e "  ${YELLOW}[WARN]${NC}  检测到项目目录已存在: $INSTALL_DIR"
+        # 尝试更新
+        if [ -d "$INSTALL_DIR/.git" ]; then
+            (cd "$INSTALL_DIR" && git pull 2>/dev/null) && {
+                echo -e "  ${GREEN}[OK]${NC}    项目已更新"
+                return 0
+            }
+        fi
+        echo -e "  ${YELLOW}[WARN]${NC}  将重新下载..."
+        rm -rf "$INSTALL_DIR"
+    fi
+
+    # 尝试 git clone
+    if command -v git &>/dev/null; then
+        if git clone --depth 1 "https://github.com/${REPO_OWNER}/${REPO_NAME}.git" "$INSTALL_DIR" 2>/dev/null; then
+            echo -e "  ${GREEN}[OK]${NC}    项目下载完成"
+            return 0
+        fi
+    fi
+
+    # git 失败，尝试下载 zip
+    echo -e "  ${YELLOW}[WARN]${NC}  Git 克隆失败，尝试下载压缩包..."
+    local zip_url="https://github.com/${REPO_OWNER}/${REPO_NAME}/archive/refs/heads/main.zip"
+    local tmp_zip="/tmp/${REPO_NAME}.zip"
+
+    if command -v wget &>/dev/null; then
+        wget -q "$zip_url" -O "$tmp_zip" 2>/dev/null
+    elif command -v curl &>/dev/null; then
+        curl -fsSL "$zip_url" -o "$tmp_zip" 2>/dev/null
+    fi
+
+    if [ -f "$tmp_zip" ]; then
+        command -v unzip &>/dev/null || pkg install -y unzip &>/dev/null
+        unzip -q "$tmp_zip" -d /tmp/ 2>/dev/null
+        mv "/tmp/${REPO_NAME}-main" "$INSTALL_DIR" 2>/dev/null
+        rm -f "$tmp_zip"
+        echo -e "  ${GREEN}[OK]${NC}    项目下载完成"
+        return 0
+    fi
+
+    echo -e "  ${RED}[ERROR] 项目下载失败，请手动克隆: git clone ${REPO_URL}${NC}"
+    exit 1
+}
+
+# ---- 加载公共库和模块 ----
+load_modules() {
+    local lib_file="$INSTALL_DIR/lib/common.sh"
+    local modules_dir="$INSTALL_DIR/modules"
+
+    # 加载公共库
+    if [ -f "$lib_file" ]; then
+        # shellcheck source=lib/common.sh
+        source "$lib_file"
+    else
+        echo -e "  ${RED}[ERROR] 找不到公共库: $lib_file${NC}"
+        exit 1
+    fi
+
+    # 加载所有模块
+    for module in "$modules_dir"/*.sh; do
+        if [ -f "$module" ]; then
+            # shellcheck source=/dev/null
+            source "$module"
+        fi
+    done
+}
+
+# ---- 交互式主菜单 ----
+show_main_menu() {
+    while true; do
+        clear
+        show_welcome
+
+        echo -e "  ${BOLD}${CYAN}请选择操作：${NC}"
+        echo ""
+        echo -e "    ${BOLD}${WHITE} 1)${NC} 🚀 一键全部安装"
+        echo -e "    ${BOLD}${WHITE} 2)${NC} 📦 配置 Termux 基础环境"
+        echo -e "    ${BOLD}${WHITE} 3)${NC} 🐧 安装 Ubuntu 系统"
+        echo -e "    ${BOLD}${WHITE} 4)${NC} 🖥️  安装桌面环境"
+        echo -e "    ${BOLD}${WHITE} 5)${NC} 🔧 安装应用软件"
+        echo -e "    ${BOLD}${WHITE} 6)${NC} 🎨 安装字体和辅助功能"
+        echo -e "    ${BOLD}${WHITE} 7)${NC} ▶️  启动桌面"
+        echo -e "    ${BOLD}${WHITE} 8)${NC} ℹ️  查看项目信息"
+        echo -e "    ${BOLD}${WHITE} 0)${NC} 🚪 退出"
+        echo ""
+        echo -e "  ${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+
+        # 显示安装状态
+        echo -en "  ${DIM}安装状态:${NC}  "
+        if state_check "termux_setup"; then echo -en "📦${GREEN}✓${NC} "; else echo -en "📦${RED}✗${NC} "; fi
+        if state_check "ubuntu_setup"; then echo -en "🐧${GREEN}✓${NC} "; else echo -en "🐧${RED}✗${NC} "; fi
+        if state_check "desktop_setup"; then echo -en "🖥️${GREEN}✓${NC} "; else echo -en "🖥️${RED}✗${NC} "; fi
+        if state_check "software_setup"; then echo -en "🔧${GREEN}✓${NC} "; else echo -en "🔧${RED}✗${NC} "; fi
+        if state_check "extras_setup"; then echo -en "🎨${GREEN}✓${NC} "; else echo -en "🎨${RED}✗${NC} "; fi
+        echo ""
+        echo ""
+
+        echo -en "  ${YELLOW}➜${NC} 请选择 [0-8]: "
+        local choice
+        read -r choice
+
+        case "$choice" in
+            1) install_all ;;
+            2) setup_termux ;;
+            3) setup_ubuntu ;;
+            4) setup_desktop ;;
+            5) setup_software ;;
+            6) setup_extras ;;
+            7) launch_desktop ;;
+            8) show_project_info ;;
+            0)
+                echo ""
+                typewriter "  👋 感谢使用，再见！" 0.02
+                echo ""
+                exit 0
+                ;;
+            *)
+                echo -e "  ${RED}无效选择，请重新输入${NC}"
+                sleep 1
+                ;;
+        esac
+
+        echo ""
+        echo -en "  按 Enter 键继续..."
+        read -r
+    done
+}
+
+# ---- 一键全部安装 ----
+install_all() {
+    echo ""
+    show_separator
+    echo -e "  ${BOLD}${GREEN}🚀 开始一键全部安装${NC}"
+    show_separator
+
+    local steps=(
+        "setup_termux:配置 Termux 基础环境"
+        "setup_ubuntu:安装 Ubuntu 系统"
+        "setup_desktop:安装桌面环境"
+        "setup_software:安装应用软件"
+        "setup_extras:安装字体和辅助功能"
+    )
+
+    local total=${#steps[@]}
+    local current=0
+    local failed=0
+
+    for step in "${steps[@]}"; do
+        ((current++))
+        local func="${step%%:*}"
+        local desc="${step##*:}"
+
+        echo ""
+        show_progress "安装进度" "$total" "$current"
+
+        if ! $func; then
+            log_error "${desc} 失败！"
+            ((failed++))
+
+            echo ""
+            if ! confirm "是否继续安装下一步？" "Y"; then
+                log_warn "安装已中止"
+                break
+            fi
+        fi
+    done
+
+    echo ""
+    show_progress "安装进度" "$total" "$total"
+
+    if [ "$failed" -eq 0 ]; then
+        show_complete
+        echo ""
+        log_info "使用以下命令启动桌面："
+        echo -e "    ${BOLD}${CYAN}~/start-desktop.sh${NC}"
+        echo ""
+        log_info "或使用 Termux:Widget 快捷方式"
+    else
+        echo ""
+        log_warn "有 ${failed} 个步骤失败，你可以稍后通过菜单重新执行失败的步骤"
+    fi
+}
+
+# ---- 项目信息 ----
+show_project_info() {
+    clear
+    show_logo
+    echo ""
+    echo -e "  ${BOLD}${CYAN}项目信息${NC}"
+    echo ""
+    echo -e "  ${WHITE}名称:${NC}     termux-ubuntu-setup"
+    echo -e "  ${WHITE}描述:${NC}     在 Android 手机上通过 Termux 运行 Ubuntu 桌面环境"
+    echo -e "  ${WHITE}仓库:${NC}     ${CYAN}${REPO_URL}${NC}"
+    echo -e "  ${WHITE}许可:${NC}     MIT License"
+    echo ""
+    echo -e "  ${BOLD}${CYAN}安装状态${NC}"
+    echo ""
+    echo -e "  Termux 基础环境:  $(state_check 'termux_setup' && echo -e "${GREEN}已安装${NC}" || echo -e "${RED}未安装${NC}")"
+    echo -e "  Ubuntu 系统:      $(state_check 'ubuntu_setup' && echo -e "${GREEN}已安装${NC}" || echo -e "${RED}未安装${NC}")"
+    echo -e "  桌面环境:        $(state_check 'desktop_setup' && echo -e "${GREEN}已安装${NC}" || echo -e "${RED}未安装${NC}")"
+    echo -e "  应用软件:        $(state_check 'software_setup' && echo -e "${GREEN}已安装${NC}" || echo -e "${RED}未安装${NC}")"
+    echo -e "  字体和辅助:      $(state_check 'extras_setup' && echo -e "${GREEN}已安装${NC}" || echo -e "${RED}未安装${NC}")"
+    echo ""
+    echo -e "  ${BOLD}${CYAN}常用命令${NC}"
+    echo ""
+    echo -e "  ${WHITE}启动桌面:${NC}   ~/start-desktop.sh"
+    echo -e "  ${WHITE}进入 Ubuntu:${NC} proot-distro login ubuntu"
+    echo -e "  ${WHITE}启动 VS Code:${NC} proot-distro login --shared-tmp ubuntu -- bash -c 'export DISPLAY=:0; code --no-sandbox'"
+    echo ""
+}
+
+# ---- 安装 tus 命令 ----
+install_tus_command() {
+    local tus_bin="$PREFIX/bin/tus"
+    if [ ! -f "$tus_bin" ]; then
+        ln -sf "$INSTALL_DIR/install" "$tus_bin"
+        chmod +x "$tus_bin"
+        echo -e "  ${GREEN}[OK]${NC}    已创建快捷命令: ${BOLD}tus${NC}"
+        echo -e "  ${DIM}以后在 Termux 中直接输入 tus 即可打开管理菜单${NC}"
+    fi
+}
+
+# ============================================================
+#  主流程
+# ============================================================
+
+main() {
+    # 阶段 1：欢迎 + 环境检测（使用内联函数，此时 lib/ 尚不可用）
+    inline_logo
+    echo ""
+    inline_typewriter "  🚀 欢迎使用 Termux Ubuntu 一键配置工具！" 0.02
+    echo ""
+    echo -e "  ${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+
+    check_environment
+
+    # 阶段 2：下载项目
+    download_project
+
+    # 阶段 3：加载公共库和模块
+    echo ""
+    echo -e "  ${BLUE}[INFO]${NC}  加载模块..."
+    load_modules
+    echo -e "  ${GREEN}[OK]${NC}    模块加载完成"
+
+    # 阶段 4：安装 tus 快捷命令
+    install_tus_command
+
+    # 阶段 5：进入交互式菜单
+    show_main_menu
+}
+
+# 执行主函数
+main "$@"
