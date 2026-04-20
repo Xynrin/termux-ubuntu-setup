@@ -270,7 +270,7 @@ get_arch() {
 }
 
 # ---- 状态追踪 ----
-STATE_FILE="/tmp/tus-state"
+STATE_FILE="${PREFIX:-$HOME}/tmp/tus-state"
 
 state_set() {
     local key="$1"

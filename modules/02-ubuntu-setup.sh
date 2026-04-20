@@ -12,7 +12,7 @@ setup_ubuntu() {
     echo ""
 
     # 1. 检查是否已安装
-    if proot-distro list 2>/dev/null | grep -q "ubuntu"; then
+    if proot-distro list --installed 2>/dev/null | grep -qi "ubuntu"; then
         log_info "检测到 Ubuntu 已安装，跳过安装步骤"
         state_set "ubuntu_setup" "1"
         configure_ubuntu_system

@@ -123,7 +123,7 @@ tus_install_all() {
 # ---- 启动浏览器 ----
 launch_browser() {
     log_info "正在启动 Firefox ESR..."
-    sv up termux-x11 2>/dev/null || true
+    command -v sv >/dev/null 2>&1 && sv up termux-x11 2>/dev/null || true
     sleep 1
     proot-distro login --shared-tmp ubuntu -- bash -c 'export DISPLAY=:0; firefox-esr'
 }
@@ -131,7 +131,7 @@ launch_browser() {
 # ---- 启动 VS Code ----
 launch_vscode() {
     log_info "正在启动 VS Code..."
-    sv up termux-x11 2>/dev/null || true
+    command -v sv >/dev/null 2>&1 && sv up termux-x11 2>/dev/null || true
     sleep 1
     proot-distro login --shared-tmp ubuntu -- bash -c 'export DISPLAY=:0; code --no-sandbox'
 }

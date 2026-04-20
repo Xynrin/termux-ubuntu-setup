@@ -16,9 +16,6 @@ setup_desktop() {
         return 1
     fi
 
-    local username
-    username="$(state_get "ubuntu_user" "user")"
-
     # 1. 在 Ubuntu 中安装桌面环境
     log_info "正在安装 Xfce4 桌面环境..."
     log_warn "此过程需要下载较多数据，请耐心等待"
@@ -28,7 +25,6 @@ setup_desktop() {
         set -e
         export DEBIAN_FRONTEND=noninteractive
 
-        # 安装 Xfce4 桌面（最小化安装）
         apt update -y
         apt install -y --no-install-recommends \
             xfce4 \
@@ -39,7 +35,6 @@ setup_desktop() {
             pavucontrol \
             dbus-user-session
 
-        # 安装一些桌面增强工具
         apt install -y --no-install-recommends \
             xfce4-panel-profiles \
             xfce4-notifyd \
@@ -48,7 +43,6 @@ setup_desktop() {
             mousepad \
             ristretto
 
-        # 清理
         apt clean
     "
 
@@ -66,24 +60,13 @@ setup_desktop() {
     local start_desktop="$HOME/start-desktop.sh"
     cat > "$start_desktop" <<'DESKTOP_EOF'
 #!/data/data/com.termux/files/usr/bin/bash
-# ============================================================
-#  start-desktop.sh - 启动 Ubuntu 桌面环境
-#  使用方法：在 Termux 中执行 ./start-desktop.sh
-# ============================================================
-
 echo "正在启动桌面环境..."
 
-# 启动 Termux-X11 服务
-sv up termux-x11 2>/dev/null || true
-
-# 等待 X11 服务就绪
+# 启动服务（检查 sv 是否可用）
+command -v sv >/dev/null 2>&1 && sv up termux-x11 2>/dev/null || true
 sleep 2
-
-# 启动 PulseAudio
-sv up pulseaudio 2>/dev/null || true
-
-# 启动 dbus
-sv up dbus-daemon 2>/dev/null || true
+command -v sv >/dev/null 2>&1 && sv up pulseaudio 2>/dev/null || true
+command -v sv >/dev/null 2>&1 && sv up dbus-daemon 2>/dev/null || true
 
 # 启动 Ubuntu 桌面
 proot-distro login \
@@ -92,7 +75,6 @@ proot-distro login \
     --shared-tmp \
     ubuntu \
     -- bash -c 'export DISPLAY=:0; dbus-launch --exit-with-session xfce4-session'
-
 DESKTOP_EOF
     chmod +x "$start_desktop"
 
@@ -103,12 +85,11 @@ DESKTOP_EOF
     local shortcut="$HOME/.shortcuts/tasks/start-desktop.sh"
     cat > "$shortcut" <<'SHORTCUT_EOF'
 #!/data/data/com.termux/files/usr/bin/bash
-# Termux:Widget 快捷方式 - 启动桌面
 cd ~
-sv up termux-x11 2>/dev/null || true
+command -v sv >/dev/null 2>&1 && sv up termux-x11 2>/dev/null || true
 sleep 2
-sv up pulseaudio 2>/dev/null || true
-sv up dbus-daemon 2>/dev/null || true
+command -v sv >/dev/null 2>&1 && sv up pulseaudio 2>/dev/null || true
+command -v sv >/dev/null 2>&1 && sv up dbus-daemon 2>/dev/null || true
 proot-distro login --isolated --bind /dev/null:/proc/sys/kernel/cap_last_cap --shared-tmp ubuntu -- bash -c 'export DISPLAY=:0; dbus-launch --exit-with-session xfce4-session'
 SHORTCUT_EOF
     chmod +x "$shortcut"
@@ -117,9 +98,8 @@ SHORTCUT_EOF
     local shortcut_vscode="$HOME/.shortcuts/tasks/start-vscode.sh"
     cat > "$shortcut_vscode" <<'VSCODE_EOF'
 #!/data/data/com.termux/files/usr/bin/bash
-# Termux:Widget 快捷方式 - 启动 VS Code
 cd ~
-sv up termux-x11 2>/dev/null || true
+command -v sv >/dev/null 2>&1 && sv up termux-x11 2>/dev/null || true
 sleep 1
 proot-distro login --shared-tmp ubuntu -- bash -c 'export DISPLAY=:0; code --no-sandbox'
 VSCODE_EOF
@@ -129,9 +109,8 @@ VSCODE_EOF
     local shortcut_browser="$HOME/.shortcuts/tasks/start-browser.sh"
     cat > "$shortcut_browser" <<'BROWSER_EOF'
 #!/data/data/com.termux/files/usr/bin/bash
-# Termux:Widget 快捷方式 - 启动浏览器
 cd ~
-sv up termux-x11 2>/dev/null || true
+command -v sv >/dev/null 2>&1 && sv up termux-x11 2>/dev/null || true
 sleep 1
 proot-distro login --shared-tmp ubuntu -- bash -c 'export DISPLAY=:0; firefox-esr'
 BROWSER_EOF
@@ -160,13 +139,11 @@ launch_desktop() {
 
     log_info "正在启动桌面环境..."
 
-    # 启动服务
-    sv up termux-x11 2>/dev/null || true
+    command -v sv >/dev/null 2>&1 && sv up termux-x11 2>/dev/null || true
     sleep 2
-    sv up pulseaudio 2>/dev/null || true
-    sv up dbus-daemon 2>/dev/null || true
+    command -v sv >/dev/null 2>&1 && sv up pulseaudio 2>/dev/null || true
+    command -v sv >/dev/null 2>&1 && sv up dbus-daemon 2>/dev/null || true
 
-    # 启动桌面
     proot-distro login \
         --isolated \
         --bind /dev/null:/proc/sys/kernel/cap_last_cap \
