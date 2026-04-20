@@ -165,12 +165,7 @@ confirm() {
 
     echo -en "  ${YELLOW}➜${NC} ${message} ${DIM}${prompt}${NC} "
     local answer
-    # 确保从终端读取输入（修复 curl | bash 管道模式问题）
-    if [ -t 0 ]; then
-        read -r answer
-    else
-        read -r answer < /dev/tty
-    fi
+    read -r answer
     answer="${answer:-$default}"
 
     [[ "$answer" =~ ^[Yy]$ ]]
@@ -199,11 +194,7 @@ show_menu() {
 
     local choice
     while true; do
-        if [ -t 0 ]; then
-            read -r choice
-        else
-            read -r choice < /dev/tty
-        fi
+        read -r choice
         if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$num_options" ]; then
             echo "$choice"
             return

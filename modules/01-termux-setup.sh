@@ -11,25 +11,16 @@ setup_termux() {
     show_separator
     echo ""
 
-    # 1. 换源
-    if confirm "是否更换为国内镜像源？（推荐国内用户）" "Y"; then
-        log_info "正在更换镜像源..."
+    # 1. 换源（默认使用清华源）
+    log_info "正在更换镜像源为清华源..."
 
-        if cmd_exists termux-change-repo 2>/dev/null; then
-            echo -e "  ${DIM}（请在弹出的对话框中选择一个国内镜像源）${NC}"
-            sleep 1
-            termux-change-repo
-        else
-            local sources_file="$PREFIX/etc/apt/sources.list"
-            cp "$sources_file" "${sources_file}.bak" 2>/dev/null
-            cat > "$sources_file" <<EOF
+    local sources_file="$PREFIX/etc/apt/sources.list"
+    cp "$sources_file" "${sources_file}.bak" 2>/dev/null
+    cat > "$sources_file" <<EOF
 # Termux 清华大学镜像源
 deb https://mirrors.tuna.tsinghua.edu.cn/termux/apt/termux-main stable main
 EOF
-        fi
-
-        log_ok "镜像源更换完成"
-    fi
+    log_ok "镜像源更换完成"
 
     # 2. 更新包管理器
     echo ""

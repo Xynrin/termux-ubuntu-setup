@@ -13,15 +13,10 @@ setup_ubuntu() {
 
     # 1. 检查是否已安装
     if proot-distro list 2>/dev/null | grep -q "ubuntu"; then
-        log_info "检测到 Ubuntu 已安装"
-        if ! confirm "是否重新安装 Ubuntu？（将清除现有数据）" "N"; then
-            log_ok "跳过 Ubuntu 安装"
-            state_set "ubuntu_setup" "1"
-            configure_ubuntu_system
-            return 0
-        fi
-        log_info "正在卸载旧版 Ubuntu..."
-        proot-distro remove ubuntu 2>/dev/null
+        log_info "检测到 Ubuntu 已安装，跳过安装步骤"
+        state_set "ubuntu_setup" "1"
+        configure_ubuntu_system
+        return 0
     fi
 
     # 2. 安装 Ubuntu
@@ -44,20 +39,11 @@ configure_ubuntu_system() {
     echo ""
     log_info "正在配置 Ubuntu 系统..."
 
-    # 获取用户名
-    local username
-    echo -en "  ${YELLOW}➜${NC} 请输入 Ubuntu 用户名 ${DIM}[默认: user]${NC}: "
-    read -r username
-    username="${username:-user}"
+    # 使用默认用户名和密码
+    local username="user"
+    local password="1234"
 
-    # 获取密码
-    local password
-    echo -en "  ${YELLOW}➜${NC} 请输入用户密码 ${DIM}[默认: 1234]${NC}: "
-    read -rs password
-    echo ""
-    password="${password:-1234}"
-
-    # 4. 在 Ubuntu 中创建用户并配置系统
+    # 在 Ubuntu 中创建用户并配置系统
     log_info "正在初始化 Ubuntu 环境..."
 
     proot-distro login ubuntu -- bash -c "
@@ -79,10 +65,10 @@ Pin-Priority: -10
 SNAP
 
         # 创建用户
-        if ! id -u '$username' &>/dev/null; then
-            useradd -m -s /bin/bash '$username'
+        if ! id -u '${username}' &>/dev/null; then
+            useradd -m -s /bin/bash '${username}'
             echo '${username}:${password}' | chpasswd
-            usermod -aG sudo '$username'
+            usermod -aG sudo '${username}'
             echo '${username} ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
         fi
 
@@ -105,12 +91,12 @@ SNAP
     "
 
     if [ $? -eq 0 ]; then
-        # 保存用户名供后续模块使用
         state_set "ubuntu_setup" "1"
         state_set "ubuntu_user" "$username"
         echo ""
         log_ok "Ubuntu 系统配置完成！"
-        log_info "用户名: ${BOLD}${username}${NC}"
+        log_info "用户名: ${BOLD}${username}${NC}  密码: ${BOLD}${password}${NC}"
+        log_warn "请登录后使用 passwd 命令修改密码"
     else
         log_error "Ubuntu 系统配置失败"
         return 1

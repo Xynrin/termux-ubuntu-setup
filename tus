@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+# ============================================================
+#  tus - termux-ubuntu-setup 本地交互式管理工具
+#
+#  使用方法: bash ~/termux-ubuntu-setup/tus
+#  或安装后直接输入: tus
+#
+#  项目地址: https://github.com/Xynrin/termux-ubuntu-setup
+# ============================================================
+
+set -uo pipefail
+
+# ---- 路径 ----
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib/common.sh"
+
+# ---- 交互式主菜单 ----
+show_main_menu() {
+    while true; do
+        clear
+        show_welcome
+
+        echo -e "  ${BOLD}${CYAN}请选择操作：${NC}"
+        echo ""
+        echo -e "    ${BOLD}${WHITE} 1)${NC} 🚀 一键全部安装"
+        echo -e "    ${BOLD}${WHITE} 2)${NC} 📦 配置 Termux 基础环境"
+        echo -e "    ${BOLD}${WHITE} 3)${NC} 🐧 安装 Ubuntu 系统"
+        echo -e "    ${BOLD}${WHITE} 4)${NC} 🖥️  安装桌面环境"
+        echo -e "    ${BOLD}${WHITE} 5)${NC} 🔧 安装应用软件"
+        echo -e "    ${BOLD}${WHITE} 6)${NC} 🎨 安装字体和辅助功能"
+        echo -e "    ${BOLD}${WHITE} 7)${NC} ▶️  启动桌面"
+        echo -e "    ${BOLD}${WHITE} 8)${NC} 🌐 启动浏览器"
+        echo -e "    ${BOLD}${WHITE} 9)${NC} 📝 启动 VS Code"
+        echo -e "    ${BOLD}${WHITE} 0)${NC} 🚪 退出"
+        echo ""
+        show_separator
+
+        # 显示安装状态
+        echo -en "  ${DIM}安装状态:${NC}  "
+        state_check "termux_setup"  && echo -en "📦${GREEN}✓${NC} " || echo -en "📦${RED}✗${NC} "
+        state_check "ubuntu_setup"  && echo -en "🐧${GREEN}✓${NC} " || echo -en "🐧${RED}✗${NC} "
+        state_check "desktop_setup" && echo -en "🖥️${GREEN}✓${NC} " || echo -en "🖥️${RED}✗${NC} "
+        state_check "software_setup" && echo -en "🔧${GREEN}✓${NC} " || echo -en "🔧${RED}✗${NC} "
+        state_check "extras_setup"  && echo -en "🎨${GREEN}✓${NC} " || echo -en "🎨${RED}✗${NC} "
+        echo ""
+        echo ""
+
+        echo -en "  ${YELLOW}➜${NC} 请选择 [0-9]: "
+        local choice
+        read -r choice
+
+        case "$choice" in
+            1) tus_install_all ;;
+            2) setup_termux; echo -en "\n  按 Enter 继续..."; read -r ;;
+            3) setup_ubuntu; echo -en "\n  按 Enter 继续..."; read -r ;;
+            4) setup_desktop; echo -en "\n  按 Enter 继续..."; read -r ;;
+            5) setup_software; echo -en "\n  按 Enter 继续..."; read -r ;;
+            6) setup_extras; echo -en "\n  按 Enter 继续..."; read -r ;;
+            7) launch_desktop ;;
+            8) launch_browser ;;
+            9) launch_vscode ;;
+            0)
+                echo ""
+                typewriter "  👋 感谢使用，再见！" 0.02
+                echo ""
+                exit 0
+                ;;
+            *)
+                echo -e "  ${RED}无效选择${NC}"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+# ---- 一键全部安装（带确认） ----
+tus_install_all() {
+    echo ""
+    show_separator
+    echo -e "  ${BOLD}${GREEN}🚀 开始一键全部安装${NC}"
+    show_separator
+
+    local steps=(
+        "setup_termux:配置 Termux 基础环境"
+        "setup_ubuntu:安装 Ubuntu 系统"
+        "setup_desktop:安装桌面环境"
+        "setup_software:安装应用软件"
+        "setup_extras:安装字体和辅助功能"
+    )
+
+    local total=${#steps[@]}
+    local current=0
+    local failed=0
+
+    for step in "${steps[@]}"; do
+        ((current++))
+        local func="${step%%:*}"
+        local desc="${step##*:}"
+
+        echo ""
+        show_progress "安装进度" "$total" "$current"
+
+        if ! $func; then
+            log_error "${desc} 失败！"
+            ((failed++))
+        fi
+    done
+
+    echo ""
+    show_progress "安装进度" "$total" "$total"
+
+    if [ "$failed" -eq 0 ]; then
+        show_complete
+    else
+        echo ""
+        log_warn "${failed} 个步骤失败"
+    fi
+
+    echo -en "\n  按 Enter 返回菜单..."
+    read -r
+}
+
+# ---- 启动浏览器 ----
+launch_browser() {
+    log_info "正在启动 Firefox ESR..."
+    sv up termux-x11 2>/dev/null || true
+    sleep 1
+    proot-distro login --shared-tmp ubuntu -- bash -c 'export DISPLAY=:0; firefox-esr'
+}
+
+# ---- 启动 VS Code ----
+launch_vscode() {
+    log_info "正在启动 VS Code..."
+    sv up termux-x11 2>/dev/null || true
+    sleep 1
+    proot-distro login --shared-tmp ubuntu -- bash -c 'export DISPLAY=:0; code --no-sandbox'
+}
+
+# ---- 主入口 ----
+main() {
+    show_main_menu
+}
+
+main "$@"
